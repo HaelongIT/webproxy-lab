@@ -1,0 +1,46 @@
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+client
+server
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Temporary files
+*~
+
+# Log files
+*.log
+
+# User-specific files
+*.suo
+*.user
+*.sln.docstates
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+CPackConfig.cmake
+CPackSourceConfig.cmake
+install_manifest.txt
+
+# VS Code files
+.vscode/
+
+# Dependency directories
+dependencies/
