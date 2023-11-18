@@ -3,8 +3,6 @@
 
 int main(int argc, char **argv) {
 // argc : 인자의 갯수 , argv : 프로그램의 리스트
-    // printf("client\n");
-
     int clientfd;
     char *host, *port, buf[MAXLINE];
     rio_t rio;
@@ -27,9 +25,9 @@ int main(int argc, char **argv) {
     while (Fgets(buf, MAXLINE, stdin) != NULL) {
         //buf에 담긴 값을 clientfd 에 옮겨씀
         Rio_writen(clientfd, buf, strlen(buf));
-        //clientfd를 읽어서 buf에 옮김
+        //clientfd를 읽어서 buf에 옮김(송신)
         Rio_readlineb(&rio, buf, MAXLINE);
-        //buf에 있는걸 stdout해줌
+        //buf에 있는걸 stdout해줌(수신)
         Fputs(buf, stdout);
     }
     Close(clientfd);
