@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
         exit(0);
     }
     host = argv[1];
-    prot = argv[2];
+    port = argv[2];
 
     //host와 port로 서버를 찾아서 clientfd에 연결함
     clientfd = Open_clientfd(host, port); 

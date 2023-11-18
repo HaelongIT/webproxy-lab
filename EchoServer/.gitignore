@@ -5,6 +5,7 @@
 
 client
 server
+echo
 
 # Executables
 *.exe
