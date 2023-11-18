@@ -18,12 +18,18 @@ int main(int argc, char **argv) {
     host = argv[1];
     prot = argv[2];
 
-    clientfd = Open_clientfd(host, port);
-    Rio_readinitb(&rio, clientfd);
+    //host와 port로 서버를 찾아서 clientfd에 연결함
+    clientfd = Open_clientfd(host, port); 
+    //버퍼 rio 와  clientfd를 연결해줌
+    Rio_readinitb(&rio, clientfd); 
 
+    //stdin을 buf에 담음
     while (Fgets(buf, MAXLINE, stdin) != NULL) {
+        //buf에 담긴 값을 clientfd 에 옮겨씀
         Rio_writen(clientfd, buf, strlen(buf));
+        //clientfd를 읽어서 buf에 옮김
         Rio_readlineb(&rio, buf, MAXLINE);
+        //buf에 있는걸 stdout해줌
         Fputs(buf, stdout);
     }
     Close(clientfd);
