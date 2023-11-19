@@ -1,6 +1,8 @@
 #include "csapp.h"
 #include <stdio.h>
 
+
+// 개인적으로 변경
 int main(int argc, char **argv) {
 // argc : 인자의 갯수 , argv : 프로그램의 리스트
     int clientfd;
