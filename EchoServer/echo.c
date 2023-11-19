@@ -7,6 +7,7 @@ void echo(int connfd) {
 
     //rio와 connfd 연결
     Rio_readinitb(&rio, connfd);
+    
     //connfd의 변경을 기다림(네트워크 대기)
     while((n = Rio_readlineb(&rio, buf, MAXLINE)) != 0){
         printf("%d byte를 받았습니다\n", (int)n);
