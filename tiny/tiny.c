@@ -18,71 +18,114 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
 
 int main(int argc, char **argv) {
+// main 함수의 인자 갯수, 인자들
   int listenfd, connfd;
+  // 듣기소켓, 연결소켓
+
   char hostname[MAXLINE], port[MAXLINE];
+  // 호스트명, 포트번호
+
   socklen_t clientlen;
+  // 클라의 길이
+
   struct sockaddr_storage clientaddr;
+  // 클라의 주소
 
   /* Check command line args */
   if (argc != 2) {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
   }
+  // main함수를 실행할 때 인자로 포트번호가 들어오지 않으면 오류처리
 
   listenfd = Open_listenfd(argv[1]);
+  // 리슨소켓 만들기
+
+  // 연결을 기달림
   while (1) {
     clientlen = sizeof(clientaddr);
     connfd = Accept(listenfd, (SA *)&clientaddr,
                     &clientlen);  // line:netp:tiny:accept
+
+    //clientaddr로 호스트명, 포트명 갱신
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
                 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
+    
     doit(connfd);   // line:netp:tiny:doit
+    // 에코서버와 다른점
+
     Close(connfd);  // line:netp:tiny:close
   }
 }
 
 void doit(int fd) {
   int is_static;
+  // 정적인지 동적인지 확인
+
   struct stat sbuf;
+
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
   char filename[MAXLINE], cgiargs[MAXLINE];
   rio_t rio;
 
   Rio_readinitb(&rio, fd);
+  // 요청라인을 rio에 초기화
+
   Rio_readlineb(&rio, buf, MAXLINE);
+  // 요청라인을 읽어서 buf에 옮김
+
   printf("Request headers:\n");
   printf("%s", buf);
+
   sscanf(buf, "%s %s %s", method, uri, version);
+  // 버퍼(요청라인)를 읽어와서 저장함
+
   if (strcasecmp(method, "GET")) {
+  // get요청이 아닌경우
+
     clienterror(fd, method, "501", "Not implemented",
                 "구현되지 않음");
+    // 에러처리
     return;
   }
+
   read_requesthdrs(&rio);
+  // 요청라인을 읽고 무시한다
 
   is_static = parse_uri(uri, filename, cgiargs);
+  // 정적 컨텐츠인지 확인
+
   if(stat(filename, &sbuf) < 0) {
+  // 파일의 속성을 읽어서 실패했으면(디스크 상에 없으면)
+
     clienterror(fd, filename, "404", "Not found",
                 "작은 웹서버는 파일을 찾을 수 없어요");
+    // 에러처리
     return;
   }
 
   if(is_static) {
+  // 정적컨텐츠 일때
     if(!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
+    // 보통파일인지랑 읽기권한 확인
       clienterror(fd, filename, "403", "Forbidden",
                   "작은 웹서버가 읽을 수 없는 파일이네요!");
+      // 에러처리
       return;
     }
     serve_static(fd, filename, sbuf.st_size);
+    // 정적인 컨텐츠 클라에게 제공
   }
   else {
+  // 동적컨텐츠일 경우
     if(!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
       clienterror(fd, filename, "403", "Forbidden",
                   "작은 웹서버가 실행할 수 없는 파일이네요!");
       return;
     }
     serve_dynamic(fd, filename, cgiargs);
+    // 동적인 컨텐츠 클라에게 제공
   }
 }
 
