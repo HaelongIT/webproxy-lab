@@ -173,10 +173,12 @@ void get_filetype(char *filename, char *filetype)
     strcpy(filetype, "text/html");
   else if(strstr(filename, ".gif"))
     strcpy(filetype, "image/gif");
-  else if(strstr(filename, "./png"))
+  else if(strstr(filename, ".png"))
     strcpy(filetype, "image/png");
-  else if(strstr(filename, "./jpg"))
-    strcpy(filetype, "image/jpeg");  //jpeg는?
+  else if(strstr(filename, ".jpg"))
+    strcpy(filetype, "image/jpeg");
+  else if(strstr(filename, ".mp4"))
+    strcpy(filetype, "video/mpeg");
   else
     strcpy(filetype, "text/plain");
 }
@@ -192,6 +194,7 @@ void serve_dynamic(int fd, char *filename, char *cgiargs)
 
   if(Fork()==0){
     setenv("QUERY_STRING", cgiargs, 1);
+    printf("\ncgiargs: %s\n", cgiargs);
     Dup2(fd, STDOUT_FILENO);
     Execve(filename, emptylist, environ);
   }
