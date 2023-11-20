@@ -194,6 +194,7 @@ void serve_dynamic(int fd, char *filename, char *cgiargs)
 
   if(Fork()==0){
     setenv("QUERY_STRING", cgiargs, 1);
+    printf("\ncgiargs: %s\n", cgiargs);
     Dup2(fd, STDOUT_FILENO);
     Execve(filename, emptylist, environ);
   }
