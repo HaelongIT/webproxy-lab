@@ -13,7 +13,7 @@ void read_requesthdrs(rio_t *rp);
 int parse_uri(char *uri, char *filename, char *cgiargs);
 void serve_static(int fd, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
-void serve_dynamic(int fd, char *filename, char *cgiargs);
+void serve_dynamic(int fd, char *filename, char *cgiargs, char *method);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
 
@@ -86,7 +86,7 @@ void doit(int fd) {
                   "작은 웹서버가 실행할 수 없는 파일이네요!");
       return;
     }
-    serve_dynamic(fd, filename, cgiargs);
+    serve_dynamic(fd, filename, cgiargs, method);
   }
 }
 
@@ -151,7 +151,7 @@ int parse_uri(char *uri, char *filename, char*cgiargs)
 
 void make_header(int fd, char *filename, int filesize){
   char filetype[MAXLINE], buf[MAXBUF];
-  
+
   get_filetype(filename, filetype);
   sprintf(buf, "HTTP/1.0 200 OK\r\n");
   sprintf(buf, "%s서버: 작은 웹 서버\r\n", buf);
@@ -193,7 +193,7 @@ void get_filetype(char *filename, char *filetype)
     strcpy(filetype, "text/plain");
 }
 
-void serve_dynamic(int fd, char *filename, char *cgiargs)
+void serve_dynamic(int fd, char *filename, char *cgiargs, char *method)
 {
   char buf[MAXBUF], *emptylist[] = {NULL};
 
@@ -204,6 +204,7 @@ void serve_dynamic(int fd, char *filename, char *cgiargs)
 
   if(Fork()==0){
     setenv("QUERY_STRING", cgiargs, 1);
+    setenv("REQUEST_METHOD", method, 1);
     printf("\ncgiargs: %s\n", cgiargs);
     Dup2(fd, STDOUT_FILENO);
     Execve(filename, emptylist, environ);
