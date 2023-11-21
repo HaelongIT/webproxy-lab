@@ -49,6 +49,7 @@ void doit(int fd) {
   char filename[MAXLINE], cgiargs[MAXLINE];
   rio_t rio;
 
+  printf("tiny doit!\n");
   Rio_readinitb(&rio, fd);
   Rio_readlineb(&rio, buf, MAXLINE);
   printf("Request headers:\n");
@@ -149,8 +150,8 @@ int parse_uri(char *uri, char *filename, char*cgiargs)
   }
 }
 
-void make_header(int fd, char *filename, int filesize){
-  char filetype[MAXLINE], buf[MAXBUF];
+void make_header(int fd, char *filename, int filesize, char *buf){
+  char filetype[MAXLINE];
 
   get_filetype(filename, filetype);
   sprintf(buf, "HTTP/1.0 200 OK\r\n");
@@ -166,7 +167,7 @@ void serve_static(int fd, char *filename, int filesize)
   int srcfd;
   char *srcp, filetype[MAXLINE], buf[MAXBUF];
 
-  make_header(fd,filename,filesize);
+  make_header(fd,filename,filesize, buf);
   printf("Response headers:\n");
   printf("%s", buf);
 
