@@ -22,12 +22,14 @@ static const char *user_agent_hdr =
 void doit(int fd);
 void read_requesthdrs(rio_t *);
 void extract_host_port_and_suffix(const char *, char *, char *, char *);
+void *thread(void *);
 
 int main(int argc, char **argv) {
-  int listenfd, connfd;
+  int listenfd, *connfdp;
   char hostname[MAXLINE], port[MAXLINE];
   socklen_t clientlen;
   struct sockaddr_storage clientaddr;
+  pthread_t tid;
 
   /* Check command line args */
   if (argc != 2) {
@@ -38,14 +40,24 @@ int main(int argc, char **argv) {
   listenfd = Open_listenfd(argv[1]);
   while (1) {
     clientlen = sizeof(clientaddr);
-    connfd = Accept(listenfd, (SA *)&clientaddr,
+    connfdp = Malloc(sizeof(int));
+    *connfdp = Accept(listenfd, (SA *)&clientaddr,
                     &clientlen);  // line:netp:tiny:accept
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
                 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
-    doit(connfd);   // line:netp:tiny:doit
-    Close(connfd);  // line:netp:tiny:close
+    Pthread_create(&tid, NULL, thread, connfdp);
   }
+}
+
+void *thread(void *vargp)
+{
+  int connfd = *((int *)vargp);
+  Pthread_detach(pthread_self());
+  Free(vargp);
+  doit(connfd);
+  Close(connfd);
+  return NULL;  
 }
 
 void doit(int clientfd) {
@@ -84,12 +96,8 @@ void doit(int clientfd) {
 
   serverfd = Open_clientfd(host, port);
   Rio_readinitb(&serverRio, serverfd);
-  // read_requesthdrs(&rio);
-  // printf("header 다 읽음\n");
-  // Rio_readnb(&rio, clientbuf, MAXLINE); //client 나머지 읽음
-  // printf("%s", clientbuf);
 
-  sprintf(headerbuf,"%sHOST:%s\n"
+  sprintf(headerbuf,"%sHost:%s\n"
   "User-Agent:%s\n"
   "Connection:close\n"
   "Proxy-Connection:close\r\n\r\n",headerbuf,host,user_agent_hdr);
