@@ -80,13 +80,12 @@ void doit(int clientfd) {
   
   char host[256];
   char port[6];
-  char suffix[256];
 
-  extract_host_port_and_suffix(url, host, port, suffix);
-  sprintf(headerbuf,"%s %s HTTP/1.0", method, suffix);
+  parse_uri(host, port, url, filename, cgiargs);
+  sprintf(headerbuf,"%s %s HTTP/1.0", method, filename);
   
   printf("method: %s\n", method);
-  printf("url:%s host:%s port:%s suffix: %s\n",url, host, port, suffix);
+  printf("url:%s host:%s port:%s filename: %s\n",url, host, port, filename);
   printf("header: %s\n", headerbuf);
   fflush(stdout);
 
@@ -123,6 +122,46 @@ void read_requesthdrs(rio_t *rp)
   return;
 }
 
+int parse_uri(char *server_name, char *server_port, char *uri, char *filename, char *cgiargs)
+{
+    // http://localhost:9999/cgi-bin/adder?123&456
+    char parsed_uri[MAXLINE]={0};
+    
+    char *parser_ptr = strstr(uri, "//") ? strstr(uri, "//") + 2 : uri;
+
+    int i=0;
+    // int length=strlen(*uri);
+    // int cnt=0;
+
+    while(*parser_ptr!=':'){
+        server_name[i]=*parser_ptr;
+        i++;
+        // cnt++;
+        parser_ptr++;
+    }
+    i=0;
+    // cnt++;
+    parser_ptr++;
+    while(*parser_ptr!='/'){
+        server_port[i]=*parser_ptr;
+        i++;
+        // cnt++;
+        parser_ptr++;
+    }
+    i=0;
+    while(*parser_ptr){
+        parsed_uri[i]=*parser_ptr;
+        i++;
+        // cnt++;        
+        parser_ptr++;
+    }
+
+    strcpy(uri,parsed_uri);
+
+    return 0;
+}
+
+
 void extract_host_port_and_suffix(const char *url, char *host, char *port, char *suffix) {
     // 기본 값 설정
     strcpy(port, "");
@@ -130,11 +169,11 @@ void extract_host_port_and_suffix(const char *url, char *host, char *port, char 
 
     // URL에서 프로토콜 부분을 찾아 넘깁니다.
     const char *host_start = strstr(url, "://");
-    if (!host_start) {
-        strcpy(host, "");
-        return;
+    if (host_start) {
+        host_start += 3;
+    }else{
+        host_start = url;
     }
-    host_start += 3; // "://" 다음으로 포인터를 이동합니다.
 
     // 호스트 부분의 끝을 찾습니다.
     const char *host_end = strpbrk(host_start, "/:");
