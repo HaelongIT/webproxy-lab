@@ -22,11 +22,11 @@ typedef struct cache{
 }Cache;
 
 void doit(int , char *);
-void read_requesthdrs(rio_t *);
+void read_requesthdrs(rio_t *, int, int *);
 void *thread(void *);
 
 void make_header(char *, char *, char *, char *);
-int parse_uri(char *, char *, char *);
+int parse_uri(char *, char *, char *, char *);
 int parse_handle(int, char *, char *, char *, char *);
 
 void readRequest(int, char *, char *, char *);
@@ -40,7 +40,7 @@ CacheObject *cacheHeader;
 
 int main(int argc, char **argv) {
   int listenfd, *connfdp;
-  char hostname[MAXLINE], port[MAXLINE];
+  char hostname[MAX_CACHE_SIZE], port[MAX_CACHE_SIZE];
   socklen_t clientlen;
   struct sockaddr_storage clientaddr;
   pthread_t tid;
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     connfdp = Malloc(sizeof(int));
     *connfdp = Accept(listenfd, (SA *)&clientaddr,
                     &clientlen);  // line:netp:tiny:accept
-    Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
+    Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAX_CACHE_SIZE, port, MAX_CACHE_SIZE,
                 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
     Pthread_create(&tid, NULL, thread, connfdp);
@@ -95,32 +95,30 @@ void *thread(void *vargp)
 void doit(int clientfd, char *cachep) {
   int is_static;
   struct stat sbuf;
-  char cachebuf[MAXLINE];
+  char cachebuf[MAX_CACHE_SIZE];
   char method[MAXLINE], url[MAXLINE], version[MAXLINE];
   char filename[MAXLINE], cgiargs[MAXLINE];
 
-  char host[256];
-  char port[6];
+  char host[256], port[256], uri[MAXLINE];
   int serverfd;
   
   printf("\ndo it!\n");
 
   readRequest(clientfd, method, url, version); //첫줄 읽기(GET만)
-  parse_uri(host, port, url); //version 처리필요
-  parse_handle(clientfd, method, host, port, url);//구조체로 묶기
+  parse_uri(url, host, port, uri); //version 처리필요
+  parse_handle(clientfd, method, host, port, uri);//구조체로 묶기
 
   int cacheFlag;
-  cacheFlag = isCache(url, cachep, cachebuf);
+  cacheFlag = isCache(uri, cachep, cachebuf);
   if(cacheFlag){
     Rio_writen(clientfd, cachebuf, strlen(cachebuf)); //클라이언트로 전송
     printf("클라이언트에 전송\n");
   }else{
     serverfd = Open_clientfd(host, port);
-    char headerbuf[MAXLINE];
-    make_header(headerbuf, method, host, url);
+    char headerbuf[MAX_CACHE_SIZE];
+    make_header(headerbuf, method, host, uri);
     requestProxy(clientfd, serverfd, headerbuf);
-    responseProxy(serverfd, clientfd, url, cachep);
-
+    responseProxy(serverfd, clientfd, uri, cachep);
   }
 }
 
@@ -200,19 +198,47 @@ void make_header(char* buf, char* method, char *host, char* uri){
   "Proxy-Connection:close\r\n\r\n",buf,host,user_agent_hdr);
   printf("header: %s\n", buf);
 }
+//todo : robust하게 변경하기
+int parse_uri(char *url, char *host, char *port, char *uri)
+{
 
-int parse_handle(int clientfd, char *method, char *host, char *port, char *url){
-  printf("method: %s\n", method);
-  printf("host:%s port:%s url:%s\n",host, port, url);
+  char buf[MAXLINE];
+  char *startp = strstr(url,"://");
+  char *portDeli;
+  char *uriDeli;
+
+  if(startp){
+    startp+=3;
+  }else{
+    startp=url;
+  }
+  strcpy(buf,startp);
+  portDeli = index(buf,':');
+  
+  uriDeli = index(buf,'/');
+  if(!uriDeli){
+    strcat(uri,'/');
+    uriDeli = buf+strlen(buf)-1;
+  }
+
+  if(!portDeli){
+    strncpy(host, buf, uriDeli-buf);
+    strcpy(port,"5000");
+  }else{
+    strncpy(host, buf, portDeli-buf);
+    strncpy(port, portDeli+1, uriDeli-portDeli-1);
+  }
+  strcpy(uri, uriDeli);
+
+}
+
+int parse_handle(int clientfd, char *method, char *host, char *port, char *uri){
+  printf("**method:%s \n host:%s \nport:%s uri:%s\n",method, host, port, uri);
 
   if (strcasecmp(method, "GET") && strcasecmp(method,"HEAD")) {
     clienterror(clientfd, method, "501", "Not implemented",
                 "구현되지 않음");
     return -1;
-  }
-  //자동 포트 배정
-  if(port[0]=='\0'){
-    strcpy(port,"5000");
   }
 
   return 0;
@@ -220,10 +246,10 @@ int parse_handle(int clientfd, char *method, char *host, char *port, char *url){
 
 void readRequest(int clientfd, char *method, char *url, char *version){
   rio_t rio;
-  char buf[MAXLINE];
+  char buf[MAX_CACHE_SIZE];
 
   Rio_readinitb(&rio, clientfd);
-  Rio_readlineb(&rio, buf, MAXLINE);
+  Rio_readlineb(&rio, buf, MAX_CACHE_SIZE);
   printf("Request headers:\n");
   printf("%s", buf);
   sscanf(buf, "%s %s %s", method, url, version);
@@ -236,72 +262,57 @@ void requestProxy(int clientfd, int serverfd, char *buf){
 
 void responseProxy(int serverfd, int clientfd, char *uri, Cache *cachep){
   rio_t serverRio;
-  char responsebuf[MAXLINE];
+  char responsebuf[MAX_CACHE_SIZE];
 
-  Rio_readinitb(&serverRio, serverfd);
-  Rio_readnb(&serverRio, responsebuf, MAXLINE); //서버 응답 읽음
+  Rio_readinitb(&serverRio, serverfd); //서버 응답 읽음
   printf("서버응답 읽음\n");
-  
-  Rio_writen(clientfd, responsebuf, strlen(responsebuf)); //클라이언트로 전송
+
+  int content_length;
+  // int *lenp = &content_length;
+  // read_requesthdrs(&serverRio, clientfd, lenp);
+  char buf[MAX_CACHE_SIZE];
+  printf("헤더 읽기 시작 \n");
+  Rio_readlineb(&serverRio, buf, MAX_CACHE_SIZE);
+  while(strcmp(buf, "\r\n")){
+    Rio_readlineb(&serverRio, buf, MAX_CACHE_SIZE);
+    printf("%s", buf);
+    if (strstr(buf, "Content-Length")) // Response Body 수신에 사용하기 위해 Content-length 저장
+      content_length = atoi(strchr(buf, ':') + 1);
+    Rio_writen(clientfd, buf, strlen(buf));
+  }
+
+  Rio_readnb(&serverRio, responsebuf, MAX_CACHE_SIZE);
+  Rio_writen(clientfd, responsebuf, content_length); //클라이언트로 전송
   printf("클라이언트에 전송\n");
 
-  strcpy(responsebuf, strstr(responsebuf,"\r\n\r\n")+4);
-
-  printf("buf len: %d Maxlen:%d\n", strlen(responsebuf), MAX_OBJECT_SIZE);
-  if(strlen(responsebuf)<=MAX_OBJECT_SIZE){
+  printf("buf len: %d Maxlen:%d\n", content_length, MAX_CACHE_SIZE);
+  if(content_length <= MAX_CACHE_SIZE){
     CacheObject* newCache = makeCache(uri, responsebuf);
     writeCache(cachep, newCache);
   }
 }
 
-void read_requesthdrs(rio_t *rp)
+void read_requesthdrs(rio_t *rp, int clientfd, int* lenp)
 {
-  char buf[MAXBUF];
+  char buf[MAX_CACHE_SIZE];
   printf("헤더 읽기 시작 \n");
-  Rio_readlineb(rp, buf, MAXLINE);
+  Rio_readlineb(rp, buf, MAX_CACHE_SIZE);
   while(strcmp(buf, "\r\n")){
-    Rio_readlineb(rp, buf, MAXLINE);
+    Rio_readlineb(rp, buf, MAX_CACHE_SIZE);
+    if (strstr(buf, "Content-Length")) // Response Body 수신에 사용하기 위해 Content-length 저장
+      *lenp = atoi(strchr(buf, ':') + 1);
     printf("%s", buf);
+    Rio_writen(clientfd, buf, strlen(buf));
   }
+  
+  printf("content-length:%d\n",*lenp);
   return;
-}
-//todo : robust하게 변경하기
-int parse_uri(char *server_name, char *server_port, char *uri)
-{
-    char parsed_uri[MAXLINE]={0};
-    
-    char *parser_ptr = (uri, "//") ? strstr(uri, "//") + 2 : uri;
-
-    int i=0;
-
-    while(*parser_ptr!=':'){
-        server_name[i]=*parser_ptr;
-        i++;
-        parser_ptr++;
-    }
-    i=0;
-    parser_ptr++;
-    while(*parser_ptr!='/'){
-        server_port[i]=*parser_ptr;
-        i++;
-        parser_ptr++;
-    }
-    i=0;
-    while(*parser_ptr){
-        parsed_uri[i]=*parser_ptr;
-        i++;     
-        parser_ptr++;
-    }
-
-    strcpy(uri,parsed_uri);
-
-    return 0;
 }
 
 void clienterror(int fd, char *cause, char*errnum, 
                   char *shortmsg, char *longmsg)
 {
-    char buf[MAXBUF], body[MAXLINE];
+    char buf[MAXBUF], body[MAXBUF];
 
     sprintf(body, "<html><head><title>error</title>");
     sprintf(body, "%s<meta charset='utf-8'></head>", body);
@@ -312,9 +323,9 @@ void clienterror(int fd, char *cause, char*errnum,
 
     sprintf(buf,"HTTP/1.0 %s %s\r\n", errnum, shortmsg);
     Rio_writen(fd, buf, strlen(buf));
-    sprintf(buf, "Content-type: text/html \r\n");
+    sprintf(buf, "Content-Type: text/html \r\n");
     Rio_writen(fd, buf, strlen(buf));
-    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
+    sprintf(buf, "Content-Length: %d\r\n\r\n", (int)strlen(body));
     Rio_writen(fd, buf, strlen(buf));
     Rio_writen(fd, body, strlen(body));
 }
