@@ -137,35 +137,28 @@ void read_requesthdrs(rio_t *rp)
 //todo : robust하게 변경하기
 int parse_uri(char *server_name, char *server_port, char *uri)
 {
-    // http://localhost:9999/cgi-bin/adder?123&456
     char parsed_uri[MAXLINE]={0};
     
     char *parser_ptr = strstr(uri, "//") ? strstr(uri, "//") + 2 : uri;
 
     int i=0;
-    // int length=strlen(*uri);
-    // int cnt=0;
 
     while(*parser_ptr!=':'){
         server_name[i]=*parser_ptr;
         i++;
-        // cnt++;
         parser_ptr++;
     }
     i=0;
-    // cnt++;
     parser_ptr++;
     while(*parser_ptr!='/'){
         server_port[i]=*parser_ptr;
         i++;
-        // cnt++;
         parser_ptr++;
     }
     i=0;
     while(*parser_ptr){
         parsed_uri[i]=*parser_ptr;
-        i++;
-        // cnt++;        
+        i++;     
         parser_ptr++;
     }
 
