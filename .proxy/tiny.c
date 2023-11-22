@@ -16,12 +16,15 @@ void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int fd, char *filename, char *cgiargs, char *method);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
+void make_header(int fd, char *filename, int filesize, char* buf);
+void *thread(void *);
 
 int main(int argc, char **argv) {
-  int listenfd, connfd;
+  int listenfd, *connfdp;
   char hostname[MAXLINE], port[MAXLINE];
   socklen_t clientlen;
   struct sockaddr_storage clientaddr;
+  pthread_t tid;
 
   /* Check command line args */
   if (argc != 2) {
@@ -32,14 +35,24 @@ int main(int argc, char **argv) {
   listenfd = Open_listenfd(argv[1]);
   while (1) {
     clientlen = sizeof(clientaddr);
-    connfd = Accept(listenfd, (SA *)&clientaddr,
+    connfdp = Malloc(sizeof(int));
+    *connfdp = Accept(listenfd, (SA *)&clientaddr,
                     &clientlen);  // line:netp:tiny:accept
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
                 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
-    doit(connfd);   // line:netp:tiny:doit
-    Close(connfd);  // line:netp:tiny:close
+    Pthread_create(&tid, NULL, thread, connfdp);
   }
+}
+
+void *thread(void *vargp)
+{
+  int connfd = *((int *)vargp);
+  Pthread_detach(pthread_self());
+  Free(vargp);
+  doit(connfd);
+  Close(connfd);
+  return NULL;
 }
 
 void doit(int fd) {
@@ -55,8 +68,9 @@ void doit(int fd) {
   printf("Request headers:\n");
   printf("%s", buf);
   sscanf(buf, "%s %s %s", method, uri, version);
+
   if (strcasecmp(method, "GET") && strcasecmp(method,"HEAD")) {
-    clienterror(fd, method, "501", "Not implemented",
+    clienterror(fd, method, "501", "Not implemented\n",
                 "구현되지 않음");
     return;
   }
@@ -65,7 +79,7 @@ void doit(int fd) {
   is_static = parse_uri(uri, filename, cgiargs);
   if(stat(filename, &sbuf) < 0) {
     clienterror(fd, filename, "404", "Not found",
-                "작은 웹서버는 파일을 찾을 수 없어요");
+                "작은 웹서버는 파일을 찾을 수 없어요\n");
     return;
   }
 
@@ -150,7 +164,7 @@ int parse_uri(char *uri, char *filename, char*cgiargs)
   }
 }
 
-void make_header(int fd, char *filename, int filesize, char *buf){
+void make_header(int fd, char *filename, int filesize, char* buf){
   char filetype[MAXLINE];
 
   get_filetype(filename, filetype);
