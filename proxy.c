@@ -9,6 +9,17 @@
 static const char *user_agent_hdr =
     "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 "
     "Firefox/10.0.3\r\n";
+typedef struct cacheObject{
+  struct cacheObject *prev;
+  struct cacheObject *next;
+  int size;
+  char *uri;
+  char *objectbuf;
+}CacheObject;
+typedef struct cache{
+  int cache_size;
+  CacheObject *header;
+}Cache;
 
 void doit(int , char *);
 void read_requesthdrs(rio_t *);
@@ -19,10 +30,13 @@ int parse_uri(char *, char *, char *);
 int parse_handle(int, char *, char *, char *, char *);
 
 void readRequest(int, char *, char *, char *);
-void responseProxy(int, int);
+void responseProxy(int, int, char *, Cache*);
 void requestProxy(int, int, char *);
 void clienterror(int , char *, char*, 
                   char *, char *); 
+
+Cache *cachep;
+CacheObject *cacheHeader;
 
 int main(int argc, char **argv) {
   int listenfd, *connfdp;
@@ -37,6 +51,8 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+  setCache();
+
   listenfd = Open_listenfd(argv[1]);
   while (1) {
     clientlen = sizeof(clientaddr);
@@ -50,25 +66,26 @@ int main(int argc, char **argv) {
   }
 }
 
-typedef struct cacheObject{
-  int usedCnt;
-  char url[MAXLINE];
-  char *objectbuf;
-  struct cacheObject *next;
-}CacheObject;
-typedef struct cache{
-  int cache_size;
-  CacheObject *cachebuf;
-}Cache;
+void setCache()
+{
+  cachep = (Cache *)Calloc(sizeof(Cache),1);
+  cacheHeader = (CacheObject *)Calloc(sizeof(CacheObject),1);
+  
+  cacheHeader->uri="\0";
+  cacheHeader->next = cacheHeader;
+  cacheHeader->prev = cacheHeader;
+  cacheHeader->size = 0;
+
+  cachep->header = cacheHeader;
+
+  return;
+}
 
 void *thread(void *vargp)
 {
   int connfd = *((int *)vargp);
   Pthread_detach(pthread_self());
   Free(vargp);
-
-  static Cache *cachep;
-  cachep = (Cache *)Malloc(sizeof(Cache));
 
   doit(connfd, cachep);
   Close(connfd);
@@ -78,7 +95,7 @@ void *thread(void *vargp)
 void doit(int clientfd, char *cachep) {
   int is_static;
   struct stat sbuf;
-  char clientbuf[MAXLINE];
+  char cachebuf[MAXLINE];
   char method[MAXLINE], url[MAXLINE], version[MAXLINE];
   char filename[MAXLINE], cgiargs[MAXLINE];
 
@@ -92,12 +109,87 @@ void doit(int clientfd, char *cachep) {
   parse_uri(host, port, url); //version 처리필요
   parse_handle(clientfd, method, host, port, url);//구조체로 묶기
 
-  serverfd = Open_clientfd(host, port);
-  char headerbuf[MAXLINE];
-  make_header(headerbuf, method, host, url);
-  requestProxy(clientfd, serverfd, headerbuf);
-  responseProxy(serverfd, clientfd);
-  
+  int cacheFlag;
+  cacheFlag = isCache(url, cachep, cachebuf);
+  if(cacheFlag){
+    Rio_writen(clientfd, cachebuf, strlen(cachebuf)); //클라이언트로 전송
+    printf("클라이언트에 전송\n");
+  }else{
+    serverfd = Open_clientfd(host, port);
+    char headerbuf[MAXLINE];
+    make_header(headerbuf, method, host, url);
+    requestProxy(clientfd, serverfd, headerbuf);
+    responseProxy(serverfd, clientfd, url, cachep);
+
+  }
+}
+
+CacheObject *makeCache(char* uri, char *buf){
+  int size = strlen(buf);
+  char* objbuf = (char *)Calloc(size,1);
+  char* objuri = (char *)Calloc(strlen(uri),1);
+  strcpy(objbuf,buf);
+  strcpy(objuri,uri);
+  CacheObject *cachePtr = (CacheObject *)Calloc(sizeof(CacheObject),1);
+  cachePtr->objectbuf = objbuf;
+  cachePtr->size = size;
+  cachePtr->uri = objuri;
+  return cachePtr;
+}
+
+int isCache(char *uri, Cache* cachep, char *buf){
+  CacheObject *ptr = cachep->header->next;
+  while(ptr->size!=0){
+    if(!strcmp(uri,ptr->uri)){
+      strcpy(buf,ptr->objectbuf);
+      refreshCache(cachep, ptr);
+      return 1;
+    }
+    ptr=ptr->next;
+  }
+  return 0;
+}
+
+void refreshCache(Cache *cachep, CacheObject *cachePtr){
+  printf("캐쉬 새로고침: %s\n", cachePtr->uri);
+  //최근 사용을 앞으로 당겨줌
+  deleteCache(cachep, cachePtr);
+  insertCacheToFirst(cachep, cachePtr);
+}
+
+void writeCache(Cache *cachep, CacheObject *cachePtr){
+  printf("캐쉬 쓰기\n");
+  while(cachep->cache_size+cachePtr->size>MAX_CACHE_SIZE)
+  {
+    printf("캐쉬 삭제 %d\n", cachep->cache_size);
+    CacheObject *lastCache = cachep->header->prev;
+    deleteCache(cachep, lastCache);
+    Free(cachePtr->uri);
+    Free(cachePtr->objectbuf);
+    Free(cachePtr);
+  }
+  insertCacheToFirst(cachep, cachePtr);
+
+}
+
+void deleteCache(Cache *cachep, CacheObject *cachePtr){
+  printf("캐쉬 분리: %s\n", cachePtr->uri);
+  cachePtr->prev->next = cachePtr->next;
+  cachePtr->next->prev = cachePtr->prev;
+  cachep->cache_size-=cachePtr->size;
+}
+
+void insertCacheToFirst(Cache *cachep, CacheObject *cachePtr){
+  CacheObject *header = cachep->header;
+  //맨 앞에 삽입
+  printf("맨 앞에 캐쉬 삽입: %s\n", cachePtr->uri);
+  // printf("내용: %s\n", cachePtr->objectbuf);
+  header->next->prev = cachePtr;
+  cachePtr->next = header->next;
+  header->next = cachePtr;
+  cachePtr->prev = header;
+  cachep->cache_size+=cachePtr->size;
+
 }
 
 void make_header(char* buf, char* method, char *host, char* uri){
@@ -118,7 +210,6 @@ int parse_handle(int clientfd, char *method, char *host, char *port, char *url){
                 "구현되지 않음");
     return -1;
   }
-
   //자동 포트 배정
   if(port[0]=='\0'){
     strcpy(port,"5000");
@@ -143,17 +234,24 @@ void requestProxy(int clientfd, int serverfd, char *buf){
   printf("서버에 헤더 전송\n");
 }
 
-void responseProxy(int serverfd, int clientfd){
+void responseProxy(int serverfd, int clientfd, char *uri, Cache *cachep){
   rio_t serverRio;
   char responsebuf[MAXLINE];
 
   Rio_readinitb(&serverRio, serverfd);
   Rio_readnb(&serverRio, responsebuf, MAXLINE); //서버 응답 읽음
   printf("서버응답 읽음\n");
+  
   Rio_writen(clientfd, responsebuf, strlen(responsebuf)); //클라이언트로 전송
   printf("클라이언트에 전송\n");
 
+  strcpy(responsebuf, strstr(responsebuf,"\r\n\r\n")+4);
 
+  printf("buf len: %d Maxlen:%d\n", strlen(responsebuf), MAX_OBJECT_SIZE);
+  if(strlen(responsebuf)<=MAX_OBJECT_SIZE){
+    CacheObject* newCache = makeCache(uri, responsebuf);
+    writeCache(cachep, newCache);
+  }
 }
 
 void read_requesthdrs(rio_t *rp)
@@ -172,7 +270,7 @@ int parse_uri(char *server_name, char *server_port, char *uri)
 {
     char parsed_uri[MAXLINE]={0};
     
-    char *parser_ptr = strstr(uri, "//") ? strstr(uri, "//") + 2 : uri;
+    char *parser_ptr = (uri, "//") ? strstr(uri, "//") + 2 : uri;
 
     int i=0;
 
@@ -220,4 +318,3 @@ void clienterror(int fd, char *cause, char*errnum,
     Rio_writen(fd, buf, strlen(buf));
     Rio_writen(fd, body, strlen(body));
 }
-
