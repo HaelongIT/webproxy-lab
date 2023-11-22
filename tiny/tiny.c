@@ -119,9 +119,9 @@ void clienterror(int fd, char *cause, char*errnum,
 
     sprintf(buf,"HTTP/1.0 %s %s\r\n", errnum, shortmsg);
     Rio_writen(fd, buf, strlen(buf));
-    sprintf(buf, "Content-type: text/html \r\n");
+    sprintf(buf, "Content-Type: text/html \r\n");
     Rio_writen(fd, buf, strlen(buf));
-    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
+    sprintf(buf, "Content-Length: %d\r\n\r\n", (int)strlen(body));
     Rio_writen(fd, buf, strlen(buf));
     Rio_writen(fd, body, strlen(body));
 }
@@ -169,10 +169,10 @@ void make_header(int fd, char *filename, int filesize, char* buf){
 
   get_filetype(filename, filetype);
   sprintf(buf, "HTTP/1.0 200 OK\r\n");
-  sprintf(buf, "%s서버: 작은 웹 서버\r\n", buf);
+  sprintf(buf, "%sServer: Tiny Server\r\n", buf);
   sprintf(buf, "%sConnection: close\r\n", buf);
-  sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
-  sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
+  sprintf(buf, "%sContent-Length: %d\r\n", buf, filesize);
+  sprintf(buf, "%sContent-Type: %s\r\n\r\n", buf, filetype);
   Rio_writen(fd, buf, strlen(buf));
 }
 
