@@ -16,6 +16,7 @@ void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int fd, char *filename, char *cgiargs, char *method);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
+void make_header(int fd, char *filename, int filesize, char* buf);
 void *thread(void *);
 
 int main(int argc, char **argv) {
@@ -89,7 +90,7 @@ void doit(int fd) {
       return;
     }
     if(!strcasecmp(method, "HEAD")){
-      make_header(fd, filename, sbuf.st_size);     
+      make_header(fd, filename, sbuf.st_size, buf);     
     }else{
       serve_static(fd, filename, sbuf.st_size);
     }
@@ -163,7 +164,7 @@ int parse_uri(char *uri, char *filename, char*cgiargs)
   }
 }
 
-void make_header(int fd, char *filename, int filesize, char *buf){
+void make_header(int fd, char *filename, int filesize, char* buf){
   char filetype[MAXLINE];
 
   get_filetype(filename, filetype);

@@ -15,6 +15,9 @@ void read_requesthdrs(rio_t *);
 void extract_host_port_and_suffix(const char *, char *, char *, char *);
 void *thread(void *);
 
+void responseProxy(int, int);
+void requestProxy(int, int, char *);
+
 int main(int argc, char **argv) {
   int listenfd, *connfdp;
   char hostname[MAXLINE], port[MAXLINE];
@@ -54,10 +57,10 @@ void *thread(void *vargp)
 void doit(int clientfd) {
   int is_static;
   struct stat sbuf;
-  char startbuf[MAXLINE], clientbuf[MAXLINE], responsebuf[MAXLINE], headerbuf[MAXLINE];
+  char startbuf[MAXLINE], clientbuf[MAXLINE];
   char method[MAXLINE], url[MAXLINE], version[MAXLINE];
   char filename[MAXLINE], cgiargs[MAXLINE];
-  rio_t rio, serverRio;
+  rio_t rio;
 
   int serverfd;
   
@@ -79,28 +82,40 @@ void doit(int clientfd) {
   char port[6];
 
   parse_uri(host, port, url);
-  sprintf(headerbuf,"%s %s HTTP/1.0", method, url);
   
+  char headerbuf[MAXLINE];
   printf("method: %s\n", method);
   printf("host:%s port:%s url:%s\n",host, port, url);
-  printf("header: %s\n", headerbuf);
+
   fflush(stdout);
 
   if(port[0]=='\0'){
     strcpy(port,"5000");
   }
 
-  serverfd = Open_clientfd(host, port);
-  Rio_readinitb(&serverRio, serverfd);
-
+  sprintf(headerbuf,"%s %s HTTP/1.0", method, url);
   sprintf(headerbuf,"%s\nHost:%s\n"
   "User-Agent:%s\n"
   "Connection:close\n"
   "Proxy-Connection:close\r\n\r\n",headerbuf,host,user_agent_hdr);
-  Rio_writen(serverfd, headerbuf, strlen(headerbuf));
+  printf("header: %s\n", headerbuf);
+
+  serverfd = Open_clientfd(host, port);
+  requestProxy(clientfd, serverfd, headerbuf);
+  responseProxy(serverfd, clientfd);
+  
+}
+
+void requestProxy(int clientfd, int serverfd, char *buf){
+  Rio_writen(serverfd, buf, strlen(buf));
   printf("서버에 헤더 전송\n");
-  // Rio_writen(serverfd, clientbuf, strlen(clientbuf)); //서버에 전송
- 
+}
+
+void responseProxy(int serverfd, int clientfd){
+  rio_t serverRio;
+  char responsebuf[MAXLINE];
+
+  Rio_readinitb(&serverRio, serverfd);
   Rio_readnb(&serverRio, responsebuf, MAXLINE); //서버 응답 읽음
   printf("서버응답 읽음\n");
   Rio_writen(clientfd, responsebuf, strlen(responsebuf)); //클라이언트로 전송
@@ -119,6 +134,7 @@ void read_requesthdrs(rio_t *rp)
   return;
 }
 
+//todo : robust하게 변경하기
 int parse_uri(char *server_name, char *server_port, char *uri)
 {
     // http://localhost:9999/cgi-bin/adder?123&456

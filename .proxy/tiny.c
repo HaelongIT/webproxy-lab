@@ -76,7 +76,7 @@ void doit(int fd) {
       return;
     }
     if(!strcasecmp(method, "HEAD")){
-      make_header(fd, filename, sbuf.st_size);     
+      make_header(fd, filename, sbuf.st_size, buf);     
     }else{
       serve_static(fd, filename, sbuf.st_size);
     }
