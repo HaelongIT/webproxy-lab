@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
         // stderr에 출력
         exit(0);
     }
-    // main함수를 실행할 때 3개의 인자가 들어오지 않으면 실행되는 곳
+    // main함수를 실행할 때 2개의 인자가 들어오지 않으면 실행되는 곳
 
     host = argv[1];
     port = argv[2];
@@ -29,6 +29,7 @@ int main(int argc, char **argv) {
     //host와 port로 서버를 찾아서 clientfd에 연결함
     clientfd = Open_clientfd(host, port); 
     // 서버의 호스트와 포트를 받아서 클라의 소켓을 열고 fd를 반환함
+    // (connect까지 보냄)
 
     //버퍼 rio 와  clientfd를 연결해줌
     Rio_readinitb(&rio, clientfd);
@@ -39,12 +40,15 @@ int main(int argc, char **argv) {
 
         //buf에 담긴 값을 clientfd 에 옮겨씀
         Rio_writen(clientfd, buf, strlen(buf));
+        // buf(입력한 내용)를 서버로 송신
 
         //clientfd를 읽어서 buf에 옮김(송신)
         Rio_readlineb(&rio, buf, MAXLINE);
+        // 서버로부터 데이터를 buf로 읽어옴
 
         //buf에 있는걸 stdout해줌(수신)
         Fputs(buf, stdout);
+        // buf(서버로부터 읽어온 데이터)를 화면에 출력
     }
     Close(clientfd);
     exit(0);
