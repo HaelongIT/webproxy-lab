@@ -25,6 +25,7 @@ void doit(int , char *);
 void read_requesthdrs(rio_t *, int, int *);
 void *thread(void *);
 
+void makeProxy_header(char *, char*, int);
 void make_header(char *, char *, char *, char *);
 int parse_uri(char *, char *, char *, char *);
 int parse_handle(int, char *, char *, char *, char *);
@@ -109,15 +110,18 @@ void doit(int clientfd, char *cachep) {
   parse_handle(clientfd, method, host, port, uri);//구조체로 묶기
 
   int cacheFlag = 0;
-  char headerbuf[MAXBUF];
-  make_header(headerbuf, method, host, uri);
+  
   cacheFlag = isCache(uri, cachep, cachebuf);
   if(cacheFlag){
+    char headerbuf[MAXBUF];
+    makeProxy_header(headerbuf, host, cacheFlag);
     Rio_writen(clientfd, headerbuf, strlen(headerbuf)); //클라이언트 헤더 전송
     Rio_writen(clientfd, cachebuf, strlen(cachebuf)); //클라이언트로 전송
     printf("클라이언트에 전송\n");
   }else{
     serverfd = Open_clientfd(host, port);
+    char headerbuf[MAXBUF];
+    make_header(headerbuf, method, host, uri);
     requestProxy(clientfd, serverfd, headerbuf);
     responseProxy(serverfd, clientfd, uri, cachep);
   }
@@ -142,7 +146,7 @@ int isCache(char *uri, Cache* cachep, char *buf){
     if(!strcmp(uri,ptr->uri)){
       strcpy(buf,ptr->objectbuf);
       refreshCache(cachep, ptr);
-      return 1;
+      return ptr->size;
     }
     ptr=ptr->next;
   }
@@ -191,11 +195,20 @@ void insertCacheToFirst(Cache *cachep, CacheObject *cachePtr){
 
 }
 
+void makeProxy_header(char* buf, char* host, int content_length){
+  sprintf(buf,"HTTP/1.0 200 OK\r\n");
+  sprintf(buf,"%sHost:%s\r\n"
+  "Server:Tiny Server"
+  "Connection:close\r\n"
+  "Content-Length:%d\r\n\r\n",buf,host,content_length);
+  printf("header: %s\n", buf);
+}
+
 void make_header(char* buf, char* method, char *host, char* uri){
-  sprintf(buf,"%s %s HTTP/1.0", method, uri);
-  sprintf(buf,"%s\nHost:%s\n"
-  "User-Agent:%s\n"
-  "Connection:close\n"
+  sprintf(buf,"%s %s HTTP/1.0\r\n", method, uri);
+  sprintf(buf,"%sHost:%s\r\n"
+  "User-Agent:%s"
+  "Connection:close\r\n"
   "Proxy-Connection:close\r\n\r\n",buf,host,user_agent_hdr);
   printf("header: %s\n", buf);
 }
