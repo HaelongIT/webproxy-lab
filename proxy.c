@@ -108,15 +108,16 @@ void doit(int clientfd, char *cachep) {
   parse_uri(url, host, port, uri); //version 처리필요
   parse_handle(clientfd, method, host, port, uri);//구조체로 묶기
 
-  int cacheFlag;
+  int cacheFlag = 0;
+  char headerbuf[MAXBUF];
+  make_header(headerbuf, method, host, uri);
   cacheFlag = isCache(uri, cachep, cachebuf);
   if(cacheFlag){
+    Rio_writen(clientfd, headerbuf, strlen(headerbuf)); //클라이언트 헤더 전송
     Rio_writen(clientfd, cachebuf, strlen(cachebuf)); //클라이언트로 전송
     printf("클라이언트에 전송\n");
   }else{
     serverfd = Open_clientfd(host, port);
-    char headerbuf[MAX_CACHE_SIZE];
-    make_header(headerbuf, method, host, uri);
     requestProxy(clientfd, serverfd, headerbuf);
     responseProxy(serverfd, clientfd, uri, cachep);
   }
@@ -270,16 +271,18 @@ void responseProxy(int serverfd, int clientfd, char *uri, Cache *cachep){
   int content_length;
   // int *lenp = &content_length;
   // read_requesthdrs(&serverRio, clientfd, lenp);
-  char buf[MAX_CACHE_SIZE];
+  char buf[MAXBUF];
   printf("헤더 읽기 시작 \n");
-  Rio_readlineb(&serverRio, buf, MAX_CACHE_SIZE);
+  Rio_readlineb(&serverRio, buf, MAXBUF);
+  Rio_writen(clientfd, buf, strlen(buf));
   while(strcmp(buf, "\r\n")){
-    Rio_readlineb(&serverRio, buf, MAX_CACHE_SIZE);
+    Rio_readlineb(&serverRio, buf, MAXBUF);
     printf("%s", buf);
     if (strstr(buf, "Content-Length")) // Response Body 수신에 사용하기 위해 Content-length 저장
       content_length = atoi(strchr(buf, ':') + 1);
     Rio_writen(clientfd, buf, strlen(buf));
   }
+  printf("컨텐츠 길이:%d\n",content_length);
 
   Rio_readnb(&serverRio, responsebuf, MAX_CACHE_SIZE);
   Rio_writen(clientfd, responsebuf, content_length); //클라이언트로 전송
@@ -305,7 +308,7 @@ void read_requesthdrs(rio_t *rp, int clientfd, int* lenp)
     Rio_writen(clientfd, buf, strlen(buf));
   }
   
-  printf("content-length:%d\n",*lenp);
+  printf("컨텐츠 길이:%d\n",*lenp);
   return;
 }
 
